@@ -46,7 +46,6 @@ int main(int argc, char* argv[]){
     num_threads = atoi(argv[4]);
     xtrain_fd = open(argv[1], O_RDONLY);
     ytrain_fd = open(argv[2], O_RDONLY);
-    //xtest_fd  = open(argv[3], O_RDONLY);
 
     tids = malloc(sizeof(pthread_t) * num_threads);
     args = malloc(sizeof(Mat3struct) * num_threads);
@@ -144,6 +143,7 @@ int main(int argc, char* argv[]){
             fprintf(stderr, "early stop!\n");
             break;
         }
+        if (epoch >= 15) break;
         pre_loss = loss;
 
         // compute matrix multplication (gradient)
@@ -173,8 +173,38 @@ int main(int argc, char* argv[]){
         }
     }
 
-    free(tids);
-    free(args);
+    // evaluate testing data
+    xtest_fd  = open(argv[3], O_RDONLY);
+    read(xtest_fd, xbytes, 10000*784); close(xtest_fd);
+
+    // prepare data in float
+    for (int i=0; i<10000; ++i){
+        for (int j=0; j<784; ++j){
+            xdata[785*i+j] = (F)xbytes[784*i+j]/255;
+        }
+        xdata[785*i+784] = 1; 
+    }
+    
+    // compute matrix multplication 
+    arg.A = (Mat){ xdata, 10000, 785 };
+    arg.B = (Mat){ weights, 785, 10 };
+    arg.C = (Mat){ y_hat, 10000, 10 };
+    matmul((void*)&arg);
+    
+    // compute answer
+    fprintf(stderr, "write file \"result.csv\"\n");
+    FILE *outF = fopen("result.csv", "w");
+    fprintf(outF, "id,label\n");
+    for (int i=0; i<10000; ++i){
+        for (int j=0; j<10; ++j){
+            if (j == 0){ tmp = y_hat[10*i], tmp_i = 0; }
+            if (y_hat[10*i+j] > tmp){ tmp = y_hat[10*i+j], tmp_i = j; }
+        }
+        fprintf(outF, "%d,%d\n", i, tmp_i);
+    }
+    fflush(outF); fclose(outF);
+
+    free(tids); free(args);
     return 0;
 }
 
