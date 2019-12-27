@@ -1,6 +1,6 @@
 CC=gcc
-DFLAGS= -g -D DEBUG
-CFLAGS=
+DFLAGS=
+CFLAGS= -O3
 
 all:
 	$(CC) hw4.c -lm -lpthread $(DFLAGS) $(CFLAGS) -o hw4 
