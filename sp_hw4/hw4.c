@@ -10,6 +10,7 @@
 
 #define NUM_IMG 60000
 #define LEARNING_RATE 0.01
+#define NUM_EPOCH 19
 #define THREAD
 
 #define F double
@@ -74,8 +75,7 @@ int main(int argc, char* argv[]){
     }
 
     F lr = LEARNING_RATE;
-    F loss = 0, pre_loss = 0, min_loss=100;
-    long F tmp, acc;
+    long F tmp;
 
     // start training
     int epoch = 0, min_epoch=0;
@@ -96,8 +96,11 @@ int main(int argc, char* argv[]){
                 args[i].C = (Mat){ y_hat+i*job_rows*10, job_rows, 10 };
             }
             args[i].B = (Mat){ weights, 785, 10 };
-            #ifdef THREAD 
-            pthread_create(&tids[i], NULL, matmul_t, (void*)&args[i]);
+            #ifdef THREAD
+            if (num_threads > 1)
+                pthread_create(&tids[i], NULL, matmul_t, (void*)&args[i]);
+            else
+                tids[i] = matmul((void*)&args[i]);
             #else
             tids[i] = matmul((void*)&args[i]);
             #endif
@@ -106,7 +109,10 @@ int main(int argc, char* argv[]){
         // compute softmax
         for (int t=0; t<num_threads; ++t){
             #ifdef THREAD
-            pthread_join(tids[t], (void**)&start_row);
+            if (num_threads > 1)
+                pthread_join(tids[t], (void**)&start_row);
+            else
+                start_row = tids[t];    
             #else
             start_row = tids[t];
             #endif
@@ -119,9 +125,16 @@ int main(int argc, char* argv[]){
                 for (int j=0; j<10; ++j){
                     y_hat[10*i+j] = expl(y_hat[10*i+j])/tmp;
                 }
+                #ifndef VERBOSE
+                for (int j=0; j<10; ++j){
+                    y_hat[10*i+j] -= ydata[10*i+j];
+                }
+                #endif
             }
         }
-        
+        #ifdef VERBOSE
+        F loss = 0, pre_loss = 0, min_loss=100;
+        long F acc;
         // compute accuracy and loss
         acc = loss = 0;
         for (int i=0; i<NUM_IMG; ++i){
@@ -143,8 +156,8 @@ int main(int argc, char* argv[]){
             fprintf(stderr, "early stop!\n");
             break;
         }
-        if (epoch >= 15) break;
         pre_loss = loss;
+        #endif
 
         // compute matrix multplication (gradient)
         arg.A = (Mat){ xdata_t, 785, NUM_IMG };
@@ -171,6 +184,8 @@ int main(int argc, char* argv[]){
                 weights[10*i+j] -= lr * M_head / (1e-8 + sqrt(V_head));
             }
         }
+        if (epoch >= NUM_EPOCH) break;
+
     }
 
     // evaluate testing data
